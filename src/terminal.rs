@@ -9,7 +9,10 @@ pub struct Terminal {
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     rows: u16,
     cols: u16,
+    id: usize,
 }
+
+static NEXT_TERM_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 impl Terminal {
     pub fn new(rows: u16, cols: u16) -> Result<Self, Box<dyn std::error::Error>> {
@@ -51,12 +54,15 @@ impl Terminal {
             }
         });
 
+        let id = NEXT_TERM_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         Ok(Self {
             parser,
             writer: Arc::new(Mutex::new(writer)),
             _child: child,
             rows,
             cols,
+            id,
         })
     }
 
@@ -92,14 +98,14 @@ impl Terminal {
         let visible_rows = ((rect.height() - 4.0) / line_height).floor().max(1.0) as u16;
         self.resize(visible_rows, visible_cols);
 
-        // Handle keyboard input
-        let id = ui.id().with("terminal_input");
-        let response = ui.interact(rect, id, egui::Sense::click());
+        // Handle keyboard input - unique ID per terminal instance
+        let unique_id = ui.id().with(("terminal_input", self.id));
+        let response = ui.interact(rect, unique_id, egui::Sense::click());
         if response.clicked() {
-            ui.memory_mut(|mem| mem.request_focus(id));
+            ui.memory_mut(|mem| mem.request_focus(unique_id));
         }
 
-        let has_focus = ui.memory(|mem| mem.has_focus(id));
+        let has_focus = ui.memory(|mem| mem.has_focus(unique_id));
 
         if has_focus {
             ui.input(|i| {
