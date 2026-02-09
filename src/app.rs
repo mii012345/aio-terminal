@@ -62,14 +62,23 @@ impl AioApp {
         let term1 = Terminal::new(24, 80).expect("Failed to create terminal");
         terminals.insert(1, term1);
 
+        // Create a third terminal for the agent pane
+        let term2 = Terminal::new(24, 80).expect("Failed to create terminal");
+        terminals.insert(2, term2);
+
+        // Layout: FileTree(15%) | Editor/Terminal area(55%) | Agent pane(30%)
         let layout = PaneNode::hsplit(
             PaneNode::leaf(TabContent::FileTree),
-            PaneNode::vsplit(
-                PaneNode::leaf(TabContent::Terminal(0)),
-                PaneNode::leaf(TabContent::Terminal(1)),
-                0.6,
+            PaneNode::hsplit(
+                PaneNode::vsplit(
+                    PaneNode::leaf(TabContent::Terminal(0)),
+                    PaneNode::leaf(TabContent::Terminal(1)),
+                    0.6,
+                ),
+                PaneNode::leaf(TabContent::Terminal(2)),
+                0.65,
             ),
-            0.2,
+            0.15,
         );
 
         Self {
@@ -77,7 +86,7 @@ impl AioApp {
             terminals,
             editors: HashMap::new(),
             file_tree: FileTree::new(cwd),
-            next_terminal_id: 2,
+            next_terminal_id: 3,
             next_editor_id: 0,
             pending_open_folder: None,
             pending_focus: None,
