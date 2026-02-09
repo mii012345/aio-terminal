@@ -291,7 +291,7 @@ impl eframe::App for AioApp {
         if new_claude_requested {
             let id = self.next_terminal_id;
             self.next_terminal_id += 1;
-            if let Ok(term) = Terminal::with_command(24, 80, "claude", &[], &[]) {
+            if let Ok(term) = Terminal::with_command(24, 80, "claude", &["--dangerously-skip-permissions"], &[]) {
                 let av = AgentView::new(term);
                 self.agent_views.insert(id, av);
                 let tab = TabContent::ClaudeCode(id);
@@ -303,7 +303,7 @@ impl eframe::App for AioApp {
         if new_codex_requested {
             let id = self.next_terminal_id;
             self.next_terminal_id += 1;
-            if let Ok(term) = Terminal::with_command(24, 80, "codex", &[], &[]) {
+            if let Ok(term) = Terminal::with_command(24, 80, "codex", &["--full-auto"], &[]) {
                 let av = AgentView::new(term);
                 self.agent_views.insert(id, av);
                 let tab = TabContent::Codex(id);
