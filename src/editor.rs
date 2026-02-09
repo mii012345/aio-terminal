@@ -98,6 +98,16 @@ impl Editor {
         if let Some(ref path) = self.file_path {
             std::fs::write(path, &self.content)?;
             self.modified = false;
+        } else {
+            // Untitled — show save dialog
+            if let Some(path) = rfd::FileDialog::new()
+                .set_file_name("untitled.txt")
+                .save_file()
+            {
+                std::fs::write(&path, &self.content)?;
+                self.file_path = Some(path);
+                self.modified = false;
+            }
         }
         Ok(())
     }
