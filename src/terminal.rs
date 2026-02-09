@@ -10,6 +10,7 @@ pub struct Terminal {
     rows: u16,
     cols: u16,
     id: usize,
+    pub grab_focus: bool,
 }
 
 static NEXT_TERM_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -63,6 +64,7 @@ impl Terminal {
             rows,
             cols,
             id,
+            grab_focus: false,
         })
     }
 
@@ -101,8 +103,9 @@ impl Terminal {
         // Handle keyboard input - unique ID per terminal instance
         let unique_id = ui.id().with(("terminal_input", self.id));
         let response = ui.interact(rect, unique_id, egui::Sense::click());
-        if response.clicked() {
+        if response.clicked() || self.grab_focus {
             ui.memory_mut(|mem| mem.request_focus(unique_id));
+            self.grab_focus = false;
         }
 
         let has_focus = ui.memory(|mem| mem.has_focus(unique_id));

@@ -16,6 +16,8 @@ pub struct AioApp {
     next_editor_id: usize,
     pending_open_folder: Option<PathBuf>,
     pending_focus: Option<TabContent>,
+    /// Tab that should grab keyboard focus on next render
+    focus_grab: Option<TabContent>,
 }
 
 impl AioApp {
@@ -79,6 +81,7 @@ impl AioApp {
             next_editor_id: 0,
             pending_open_folder: None,
             pending_focus: None,
+            focus_grab: None,
         }
     }
 
@@ -274,8 +277,9 @@ impl eframe::App for AioApp {
         }
 
         // Handle pending focus — switch to the tab in whichever pane contains it
-        if let Some(ref target) = self.pending_focus.take() {
-            Self::focus_tab(&mut self.pane_root, target);
+        if let Some(target) = self.pending_focus.take() {
+            Self::focus_tab(&mut self.pane_root, &target);
+            self.focus_grab = Some(target);
         }
 
         let file_to_open = self.file_tree.take_pending_open();
@@ -284,6 +288,23 @@ impl eframe::App for AioApp {
             .frame(egui::Frame::NONE.fill(crate::theme::BG_BASE))
             .show(ctx, |ui| {
                 let rect = ui.available_rect_before_wrap();
+
+                // Set grab_focus on the target terminal/editor
+                if let Some(ref target) = self.focus_grab.take() {
+                    match target {
+                        TabContent::Terminal(id) => {
+                            if let Some(term) = self.terminals.get_mut(id) {
+                                term.grab_focus = true;
+                            }
+                        }
+                        TabContent::Editor(id) => {
+                            if let Some(editor) = self.editors.get_mut(id) {
+                                editor.grab_focus = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
 
                 let terminals = &mut self.terminals;
                 let file_tree = &mut self.file_tree;

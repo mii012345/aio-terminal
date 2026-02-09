@@ -25,6 +25,7 @@ pub struct Editor {
     pub search_query: String,
     pub search_matches: Vec<(usize, usize)>, // (start, end) byte offsets
     pub search_current: usize,
+    pub grab_focus: bool,
 
     // Undo/Redo
     undo_stack: Vec<UndoEntry>,
@@ -47,6 +48,7 @@ impl Editor {
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
+            grab_focus: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             last_snapshot_content: String::new(),
@@ -74,6 +76,7 @@ impl Editor {
             search_query: String::new(),
             search_matches: Vec::new(),
             search_current: 0,
+            grab_focus: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             last_snapshot_content: snapshot,
@@ -391,8 +394,9 @@ impl Editor {
         let unique_id = ui.id().with(("editor_input", self.id));
         let response = ui.interact(rect, unique_id, egui::Sense::click());
 
-        if response.clicked() {
+        if response.clicked() || self.grab_focus {
             ui.memory_mut(|mem| mem.request_focus(unique_id));
+            self.grab_focus = false;
 
             // Calculate click position to set cursor
             if let Some(pos) = response.interact_pointer_pos() {
