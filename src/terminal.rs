@@ -68,6 +68,76 @@ impl Terminal {
         })
     }
 
+    pub fn with_command(
+        rows: u16,
+        cols: u16,
+        program: &str,
+        args: &[&str],
+        extra_env: &[(&str, &str)],
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let pty_system = NativePtySystem::default();
+        let pair = pty_system.openpty(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
+
+        let mut cmd = CommandBuilder::new(program);
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        // Inherit PATH so claude/codex in ~/.local/bin are found
+        if let Ok(path) = std::env::var("PATH") {
+            cmd.env("PATH", path);
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            cmd.env("HOME", home);
+        }
+        for (k, v) in extra_env {
+            cmd.env(k, v);
+        }
+
+        let child = pair.slave.spawn_command(cmd)?;
+        drop(pair.slave);
+
+        let reader = pair.master.try_clone_reader()?;
+        let writer = pair.master.take_writer()?;
+
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 1000)));
+        let parser_clone = parser.clone();
+
+        std::thread::spawn(move || {
+            let mut reader = reader;
+            let mut buf = [0u8; 8192];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Ok(mut p) = parser_clone.lock() {
+                            p.process(&buf[..n]);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let id = NEXT_TERM_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        Ok(Self {
+            parser,
+            writer: Arc::new(Mutex::new(writer)),
+            _child: child,
+            rows,
+            cols,
+            id,
+            grab_focus: false,
+        })
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if rows != self.rows || cols != self.cols {
             self.rows = rows;

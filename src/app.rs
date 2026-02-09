@@ -151,7 +151,7 @@ impl AioApp {
                     }
                     // Clean up resources
                     match removed {
-                        TabContent::Terminal(id) => { terminals.remove(&id); }
+                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => { terminals.remove(&id); }
                         TabContent::Editor(id) => { editors.remove(&id); }
                         _ => {}
                     }
@@ -159,7 +159,7 @@ impl AioApp {
                     // Don't close the last tab in a pane (keep at least the pane)
                     let removed = &leaf.tabs[0];
                     match removed {
-                        TabContent::Terminal(id) => { terminals.remove(id); }
+                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => { terminals.remove(id); }
                         TabContent::Editor(id) => { editors.remove(id); }
                         _ => {}
                     }
@@ -182,6 +182,8 @@ impl AioApp {
                             (TabContent::Terminal(a), TabContent::Terminal(b)) => a == b,
                             (TabContent::Editor(a), TabContent::Editor(b)) => a == b,
                             (TabContent::FileTree, TabContent::FileTree) => true,
+                            (TabContent::ClaudeCode(a), TabContent::ClaudeCode(b)) => a == b,
+                            (TabContent::Codex(a), TabContent::Codex(b)) => a == b,
                             _ => false,
                         };
                         if matches {
@@ -219,18 +221,21 @@ impl eframe::App for AioApp {
         let mut close_tab_requested = false;
         let mut new_terminal_requested = false;
         let mut new_file_requested = false;
+        let mut new_claude_requested = false;
+        let mut new_codex_requested = false;
         ctx.input(|i| {
             let cmd = i.modifiers.mac_cmd || i.modifiers.ctrl;
-            if cmd && i.key_pressed(egui::Key::O) {
+            if cmd && i.modifiers.shift && i.key_pressed(egui::Key::C) {
+                new_claude_requested = true;
+            } else if cmd && i.modifiers.shift && i.key_pressed(egui::Key::X) {
+                new_codex_requested = true;
+            } else if cmd && i.key_pressed(egui::Key::O) {
                 open_folder_requested = true;
-            }
-            if cmd && i.key_pressed(egui::Key::W) {
+            } else if cmd && i.key_pressed(egui::Key::W) {
                 close_tab_requested = true;
-            }
-            if cmd && i.key_pressed(egui::Key::T) {
+            } else if cmd && i.key_pressed(egui::Key::T) {
                 new_terminal_requested = true;
-            }
-            if cmd && i.key_pressed(egui::Key::N) {
+            } else if cmd && i.key_pressed(egui::Key::N) {
                 new_file_requested = true;
             }
         });
@@ -258,6 +263,28 @@ impl eframe::App for AioApp {
             let tab = TabContent::Editor(id);
             Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
             self.pending_focus = Some(tab);
+        }
+
+        if new_claude_requested {
+            let id = self.next_terminal_id;
+            self.next_terminal_id += 1;
+            if let Ok(term) = Terminal::with_command(24, 80, "claude", &[], &[]) {
+                self.terminals.insert(id, term);
+                let tab = TabContent::ClaudeCode(id);
+                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                self.pending_focus = Some(tab);
+            }
+        }
+
+        if new_codex_requested {
+            let id = self.next_terminal_id;
+            self.next_terminal_id += 1;
+            if let Ok(term) = Terminal::with_command(24, 80, "codex", &[], &[]) {
+                self.terminals.insert(id, term);
+                let tab = TabContent::Codex(id);
+                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                self.pending_focus = Some(tab);
+            }
         }
 
         if open_folder_requested {
@@ -292,7 +319,7 @@ impl eframe::App for AioApp {
                 // Set grab_focus on the target terminal/editor
                 if let Some(ref target) = self.focus_grab.take() {
                     match target {
-                        TabContent::Terminal(id) => {
+                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
                             if let Some(term) = self.terminals.get_mut(id) {
                                 term.grab_focus = true;
                             }
@@ -319,7 +346,7 @@ impl eframe::App for AioApp {
 
                         if let Some(tab) = leaf.active().cloned() {
                             match tab {
-                                TabContent::Terminal(id) => {
+                                TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
                                     if let Some(term) = terminals.get_mut(&id) {
                                         term.render(ui, content_rect);
                                     }

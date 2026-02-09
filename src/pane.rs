@@ -6,9 +6,8 @@ pub enum TabContent {
     Terminal(usize), // terminal instance id
     FileTree,
     Editor(usize),   // editor instance id
-    // Phase 4+
-    // DB,
-    // Browser,
+    ClaudeCode(usize), // Claude Code terminal instance id
+    Codex(usize),      // Codex terminal instance id
 }
 
 impl TabContent {
@@ -17,6 +16,8 @@ impl TabContent {
             TabContent::Terminal(id) => format!("Terminal {}", id),
             TabContent::FileTree => "Files".to_string(),
             TabContent::Editor(id) => format!("Editor {}", id),
+            TabContent::ClaudeCode(_) => "Claude Code".to_string(),
+            TabContent::Codex(_) => "Codex".to_string(),
         }
     }
 
