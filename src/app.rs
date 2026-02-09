@@ -21,6 +21,36 @@ impl AioApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Theme::apply(&cc.egui_ctx);
 
+        // Load Japanese font from system
+        let mut fonts = egui::FontDefinitions::default();
+        let jp_font_paths = [
+            "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/Library/Fonts/Arial Unicode.ttf",
+            // Linux fallbacks
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        ];
+        for path in &jp_font_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "jp_font".to_owned(),
+                    egui::FontData::from_owned(data).into(),
+                );
+                // Add as fallback to both proportional and monospace
+                if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                    family.push("jp_font".to_owned());
+                }
+                if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+                    family.push("jp_font".to_owned());
+                }
+                break;
+            }
+        }
+        cc.egui_ctx.set_fonts(fonts);
+
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
 
         let mut terminals = HashMap::new();
