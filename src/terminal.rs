@@ -197,7 +197,7 @@ fn vt100_color_to_egui(color: vt100::Color, is_fg: bool) -> Color32 {
     match color {
         vt100::Color::Default => {
             if is_fg {
-                crate::theme::TEXT_PRIMARY
+                Color32::from_rgb(36, 36, 36)
             } else {
                 crate::theme::TERMINAL_BG
             }
