@@ -176,6 +176,9 @@ pub fn draw_tab_bar(ui: &mut egui::Ui, rect: egui::Rect, leaf: &mut LeafPane) ->
     ui.painter()
         .rect_filled(tab_rect, 0.0, crate::theme::TAB_INACTIVE);
 
+    // Use rect position as unique pane identifier
+    let pane_id = (rect.left() as i32, rect.top() as i32);
+
     let mut x = tab_rect.left() + 4.0;
     for (i, tab) in leaf.tabs.iter().enumerate() {
         let title = tab.title();
@@ -189,7 +192,7 @@ pub fn draw_tab_bar(ui: &mut egui::Ui, rect: egui::Rect, leaf: &mut LeafPane) ->
         };
         ui.painter().rect_filled(this_tab, 2.0, bg);
 
-        let id = ui.id().with("tab").with(i);
+        let id = ui.id().with("tab").with(pane_id).with(i);
         let resp = ui.interact(this_tab, id, egui::Sense::click());
         if resp.clicked() {
             leaf.active_tab = i;
@@ -231,6 +234,8 @@ pub fn draw_tab_bar_with_editors(
     ui.painter()
         .rect_filled(tab_rect, 0.0, crate::theme::TAB_INACTIVE);
 
+    let pane_id = (rect.left() as i32, rect.top() as i32);
+
     let mut x = tab_rect.left() + 4.0;
     for (i, tab) in leaf.tabs.iter().enumerate() {
         let title = tab.title_with_editors(editors);
@@ -244,7 +249,7 @@ pub fn draw_tab_bar_with_editors(
         };
         ui.painter().rect_filled(this_tab, 2.0, bg);
 
-        let id = ui.id().with("tab").with(i);
+        let id = ui.id().with("tab_e").with(pane_id).with(i);
         let resp = ui.interact(this_tab, id, egui::Sense::click());
         if resp.clicked() {
             leaf.active_tab = i;
