@@ -53,6 +53,10 @@ impl Editor {
         }
     }
 
+    pub fn new_empty(id: EditorId) -> Self {
+        Self::new(id)
+    }
+
     pub fn open_file(id: EditorId, path: PathBuf) -> Result<Self, std::io::Error> {
         let content = std::fs::read_to_string(&path)?;
         let line_count = content.lines().count().max(1);

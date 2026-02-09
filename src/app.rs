@@ -151,6 +151,8 @@ impl eframe::App for AioApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut open_folder_requested = false;
         let mut close_tab_requested = false;
+        let mut new_terminal_requested = false;
+        let mut new_file_requested = false;
         ctx.input(|i| {
             let cmd = i.modifiers.mac_cmd || i.modifiers.ctrl;
             if cmd && i.key_pressed(egui::Key::O) {
@@ -159,10 +161,33 @@ impl eframe::App for AioApp {
             if cmd && i.key_pressed(egui::Key::W) {
                 close_tab_requested = true;
             }
+            if cmd && i.key_pressed(egui::Key::T) {
+                new_terminal_requested = true;
+            }
+            if cmd && i.key_pressed(egui::Key::N) {
+                new_file_requested = true;
+            }
         });
 
         if close_tab_requested {
             Self::close_active_tab(&mut self.pane_root, &mut self.terminals, &mut self.editors);
+        }
+
+        if new_terminal_requested {
+            let id = self.next_terminal_id;
+            self.next_terminal_id += 1;
+            if let Ok(term) = Terminal::new(24, 80) {
+                self.terminals.insert(id, term);
+                Self::add_tab_to_pane(&mut self.pane_root, TabContent::Terminal(id));
+            }
+        }
+
+        if new_file_requested {
+            let id = self.next_editor_id;
+            self.next_editor_id += 1;
+            let editor = Editor::new_empty(id);
+            self.editors.insert(id, editor);
+            Self::add_tab_to_pane(&mut self.pane_root, TabContent::Editor(id));
         }
 
         if open_folder_requested {
