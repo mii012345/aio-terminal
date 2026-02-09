@@ -15,6 +15,7 @@ pub struct AioApp {
     next_terminal_id: usize,
     next_editor_id: usize,
     pending_open_folder: Option<PathBuf>,
+    pending_focus: Option<TabContent>,
 }
 
 impl AioApp {
@@ -77,13 +78,15 @@ impl AioApp {
             next_terminal_id: 2,
             next_editor_id: 0,
             pending_open_folder: None,
+            pending_focus: None,
         }
     }
 
     fn open_file_in_editor(&mut self, path: PathBuf) {
-        // Check if already open
-        for (_id, editor) in &self.editors {
+        // Check if already open — focus existing tab
+        for (id, editor) in &self.editors {
             if editor.file_path.as_ref() == Some(&path) {
+                self.pending_focus = Some(TabContent::Editor(*id));
                 return;
             }
         }
@@ -94,7 +97,9 @@ impl AioApp {
         match Editor::open_file(id, path) {
             Ok(editor) => {
                 self.editors.insert(id, editor);
-                Self::add_tab_to_pane(&mut self.pane_root, TabContent::Editor(id));
+                let tab = TabContent::Editor(id);
+                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                self.pending_focus = Some(tab);
             }
             Err(e) => {
                 eprintln!("Failed to open file: {}", e);
@@ -165,6 +170,34 @@ impl AioApp {
         }
     }
 
+    fn focus_tab(node: &mut PaneNode, target: &TabContent) -> bool {
+        match node {
+            PaneNode::Leaf(leaf) => {
+                for (i, tab) in leaf.tabs.iter().enumerate() {
+                    if std::mem::discriminant(tab) == std::mem::discriminant(target) {
+                        let matches = match (tab, target) {
+                            (TabContent::Terminal(a), TabContent::Terminal(b)) => a == b,
+                            (TabContent::Editor(a), TabContent::Editor(b)) => a == b,
+                            (TabContent::FileTree, TabContent::FileTree) => true,
+                            _ => false,
+                        };
+                        if matches {
+                            leaf.active_tab = i;
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            PaneNode::HSplit { left, right, .. } => {
+                Self::focus_tab(left, target) || Self::focus_tab(right, target)
+            }
+            PaneNode::VSplit { top, bottom, .. } => {
+                Self::focus_tab(top, target) || Self::focus_tab(bottom, target)
+            }
+        }
+    }
+
     fn force_add_tab(node: &mut PaneNode, content: TabContent) {
         match node {
             PaneNode::Leaf(leaf) => {
@@ -208,7 +241,9 @@ impl eframe::App for AioApp {
             self.next_terminal_id += 1;
             if let Ok(term) = Terminal::new(24, 80) {
                 self.terminals.insert(id, term);
-                Self::add_tab_to_pane(&mut self.pane_root, TabContent::Terminal(id));
+                let tab = TabContent::Terminal(id);
+                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                self.pending_focus = Some(tab);
             }
         }
 
@@ -217,7 +252,9 @@ impl eframe::App for AioApp {
             self.next_editor_id += 1;
             let editor = Editor::new_empty(id);
             self.editors.insert(id, editor);
-            Self::add_tab_to_pane(&mut self.pane_root, TabContent::Editor(id));
+            let tab = TabContent::Editor(id);
+            Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+            self.pending_focus = Some(tab);
         }
 
         if open_folder_requested {
@@ -234,6 +271,11 @@ impl eframe::App for AioApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(
                 format!("AiO Terminal — {}", name),
             ));
+        }
+
+        // Handle pending focus — switch to the tab in whichever pane contains it
+        if let Some(ref target) = self.pending_focus.take() {
+            Self::focus_tab(&mut self.pane_root, target);
         }
 
         let file_to_open = self.file_tree.take_pending_open();
