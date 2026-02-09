@@ -98,6 +98,43 @@ impl AioApp {
         }
     }
 
+    fn close_active_tab(
+        node: &mut PaneNode,
+        terminals: &mut HashMap<usize, Terminal>,
+        editors: &mut HashMap<usize, Editor>,
+    ) {
+        // Find the first leaf and close its active tab
+        match node {
+            PaneNode::Leaf(leaf) => {
+                if leaf.tabs.len() > 1 {
+                    let removed = leaf.tabs.remove(leaf.active_tab);
+                    if leaf.active_tab >= leaf.tabs.len() {
+                        leaf.active_tab = leaf.tabs.len().saturating_sub(1);
+                    }
+                    // Clean up resources
+                    match removed {
+                        TabContent::Terminal(id) => { terminals.remove(&id); }
+                        TabContent::Editor(id) => { editors.remove(&id); }
+                        _ => {}
+                    }
+                } else if leaf.tabs.len() == 1 {
+                    // Don't close the last tab in a pane (keep at least the pane)
+                    let removed = &leaf.tabs[0];
+                    match removed {
+                        TabContent::Terminal(id) => { terminals.remove(id); }
+                        TabContent::Editor(id) => { editors.remove(id); }
+                        _ => {}
+                    }
+                    // Replace with an empty terminal
+                    // For now just keep it
+                }
+            }
+            // Close from the rightmost/bottom-most leaf first (most likely focused)
+            PaneNode::HSplit { right, .. } => Self::close_active_tab(right, terminals, editors),
+            PaneNode::VSplit { top, .. } => Self::close_active_tab(top, terminals, editors),
+        }
+    }
+
     fn force_add_tab(node: &mut PaneNode, content: TabContent) {
         match node {
             PaneNode::Leaf(leaf) => {
@@ -113,12 +150,20 @@ impl AioApp {
 impl eframe::App for AioApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut open_folder_requested = false;
+        let mut close_tab_requested = false;
         ctx.input(|i| {
             let cmd = i.modifiers.mac_cmd || i.modifiers.ctrl;
             if cmd && i.key_pressed(egui::Key::O) {
                 open_folder_requested = true;
             }
+            if cmd && i.key_pressed(egui::Key::W) {
+                close_tab_requested = true;
+            }
         });
+
+        if close_tab_requested {
+            Self::close_active_tab(&mut self.pane_root, &mut self.terminals, &mut self.editors);
+        }
 
         if open_folder_requested {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
