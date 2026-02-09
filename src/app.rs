@@ -203,6 +203,17 @@ impl AioApp {
         }
     }
 
+    fn add_tab_to_rightmost(node: &mut PaneNode, content: TabContent) {
+        match node {
+            PaneNode::Leaf(leaf) => {
+                leaf.tabs.push(content);
+                leaf.active_tab = leaf.tabs.len() - 1;
+            }
+            PaneNode::HSplit { right, .. } => Self::add_tab_to_rightmost(right, content),
+            PaneNode::VSplit { top, .. } => Self::add_tab_to_rightmost(top, content),
+        }
+    }
+
     fn force_add_tab(node: &mut PaneNode, content: TabContent) {
         match node {
             PaneNode::Leaf(leaf) => {
@@ -225,9 +236,10 @@ impl eframe::App for AioApp {
         let mut new_codex_requested = false;
         ctx.input(|i| {
             let cmd = i.modifiers.mac_cmd || i.modifiers.ctrl;
-            if cmd && i.modifiers.shift && i.key_pressed(egui::Key::C) {
+            // Cmd+Shift+A: Claude Code, Cmd+Shift+D: Codex (avoid C/X terminal conflicts)
+            if cmd && i.modifiers.shift && i.key_pressed(egui::Key::A) {
                 new_claude_requested = true;
-            } else if cmd && i.modifiers.shift && i.key_pressed(egui::Key::X) {
+            } else if cmd && i.modifiers.shift && i.key_pressed(egui::Key::D) {
                 new_codex_requested = true;
             } else if cmd && i.key_pressed(egui::Key::O) {
                 open_folder_requested = true;
@@ -271,7 +283,7 @@ impl eframe::App for AioApp {
             if let Ok(term) = Terminal::with_command(24, 80, "claude", &[], &[]) {
                 self.terminals.insert(id, term);
                 let tab = TabContent::ClaudeCode(id);
-                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                Self::add_tab_to_rightmost(&mut self.pane_root, tab.clone());
                 self.pending_focus = Some(tab);
             }
         }
@@ -282,7 +294,7 @@ impl eframe::App for AioApp {
             if let Ok(term) = Terminal::with_command(24, 80, "codex", &[], &[]) {
                 self.terminals.insert(id, term);
                 let tab = TabContent::Codex(id);
-                Self::add_tab_to_pane(&mut self.pane_root, tab.clone());
+                Self::add_tab_to_rightmost(&mut self.pane_root, tab.clone());
                 self.pending_focus = Some(tab);
             }
         }
