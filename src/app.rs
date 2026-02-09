@@ -1,3 +1,4 @@
+use crate::agent_view::AgentView;
 use crate::editor::Editor;
 use crate::file_tree::FileTree;
 use crate::pane::{self, PaneNode, TabContent};
@@ -11,6 +12,7 @@ pub struct AioApp {
     pane_root: PaneNode,
     terminals: HashMap<usize, Terminal>,
     editors: HashMap<usize, Editor>,
+    agent_views: HashMap<usize, AgentView>,
     file_tree: FileTree,
     next_terminal_id: usize,
     next_editor_id: usize,
@@ -85,6 +87,7 @@ impl AioApp {
             pane_root: layout,
             terminals,
             editors: HashMap::new(),
+            agent_views: HashMap::new(),
             file_tree: FileTree::new(cwd),
             next_terminal_id: 3,
             next_editor_id: 0,
@@ -149,6 +152,7 @@ impl AioApp {
         node: &mut PaneNode,
         terminals: &mut HashMap<usize, Terminal>,
         editors: &mut HashMap<usize, Editor>,
+        agent_views: &mut HashMap<usize, AgentView>,
     ) {
         // Find the first leaf and close its active tab
         match node {
@@ -160,25 +164,23 @@ impl AioApp {
                     }
                     // Clean up resources
                     match removed {
-                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => { terminals.remove(&id); }
+                        TabContent::Terminal(id) => { terminals.remove(&id); }
+                        TabContent::ClaudeCode(id) | TabContent::Codex(id) => { agent_views.remove(&id); }
                         TabContent::Editor(id) => { editors.remove(&id); }
                         _ => {}
                     }
                 } else if leaf.tabs.len() == 1 {
-                    // Don't close the last tab in a pane (keep at least the pane)
                     let removed = &leaf.tabs[0];
                     match removed {
-                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => { terminals.remove(id); }
+                        TabContent::Terminal(id) => { terminals.remove(id); }
+                        TabContent::ClaudeCode(id) | TabContent::Codex(id) => { agent_views.remove(id); }
                         TabContent::Editor(id) => { editors.remove(id); }
                         _ => {}
                     }
-                    // Replace with an empty terminal
-                    // For now just keep it
                 }
             }
-            // Close from the rightmost/bottom-most leaf first (most likely focused)
-            PaneNode::HSplit { right, .. } => Self::close_active_tab(right, terminals, editors),
-            PaneNode::VSplit { top, .. } => Self::close_active_tab(top, terminals, editors),
+            PaneNode::HSplit { right, .. } => Self::close_active_tab(right, terminals, editors, agent_views),
+            PaneNode::VSplit { top, .. } => Self::close_active_tab(top, terminals, editors, agent_views),
         }
     }
 
@@ -262,7 +264,7 @@ impl eframe::App for AioApp {
         });
 
         if close_tab_requested {
-            Self::close_active_tab(&mut self.pane_root, &mut self.terminals, &mut self.editors);
+            Self::close_active_tab(&mut self.pane_root, &mut self.terminals, &mut self.editors, &mut self.agent_views);
         }
 
         if new_terminal_requested {
@@ -290,7 +292,8 @@ impl eframe::App for AioApp {
             let id = self.next_terminal_id;
             self.next_terminal_id += 1;
             if let Ok(term) = Terminal::with_command(24, 80, "claude", &[], &[]) {
-                self.terminals.insert(id, term);
+                let av = AgentView::new(term);
+                self.agent_views.insert(id, av);
                 let tab = TabContent::ClaudeCode(id);
                 Self::add_tab_to_rightmost(&mut self.pane_root, tab.clone());
                 self.pending_focus = Some(tab);
@@ -301,7 +304,8 @@ impl eframe::App for AioApp {
             let id = self.next_terminal_id;
             self.next_terminal_id += 1;
             if let Ok(term) = Terminal::with_command(24, 80, "codex", &[], &[]) {
-                self.terminals.insert(id, term);
+                let av = AgentView::new(term);
+                self.agent_views.insert(id, av);
                 let tab = TabContent::Codex(id);
                 Self::add_tab_to_rightmost(&mut self.pane_root, tab.clone());
                 self.pending_focus = Some(tab);
@@ -337,12 +341,17 @@ impl eframe::App for AioApp {
             .show(ctx, |ui| {
                 let rect = ui.available_rect_before_wrap();
 
-                // Set grab_focus on the target terminal/editor
+                // Set grab_focus on the target terminal/editor/agent_view
                 if let Some(ref target) = self.focus_grab.take() {
                     match target {
-                        TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
+                        TabContent::Terminal(id) => {
                             if let Some(term) = self.terminals.get_mut(id) {
                                 term.grab_focus = true;
+                            }
+                        }
+                        TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
+                            if let Some(av) = self.agent_views.get_mut(id) {
+                                av.grab_focus = true;
                             }
                         }
                         TabContent::Editor(id) => {
@@ -357,6 +366,7 @@ impl eframe::App for AioApp {
                 let terminals = &mut self.terminals;
                 let file_tree = &mut self.file_tree;
                 let editors = &mut self.editors;
+                let agent_views = &mut self.agent_views;
 
                 pane::render_pane_tree(
                     ui,
@@ -367,9 +377,14 @@ impl eframe::App for AioApp {
 
                         if let Some(tab) = leaf.active().cloned() {
                             match tab {
-                                TabContent::Terminal(id) | TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
+                                TabContent::Terminal(id) => {
                                     if let Some(term) = terminals.get_mut(&id) {
                                         term.render(ui, content_rect);
+                                    }
+                                }
+                                TabContent::ClaudeCode(id) | TabContent::Codex(id) => {
+                                    if let Some(av) = agent_views.get_mut(&id) {
+                                        av.render(ui, content_rect);
                                     }
                                 }
                                 TabContent::FileTree => {

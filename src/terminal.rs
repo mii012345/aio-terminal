@@ -149,6 +149,32 @@ impl Terminal {
         }
     }
 
+    /// Get current screen text content for parsing
+    pub fn screen_text(&self) -> String {
+        if let Ok(parser) = self.parser.lock() {
+            let screen = parser.screen();
+            let mut text = String::new();
+            for row in 0..self.rows {
+                let mut line = String::new();
+                for col in 0..self.cols {
+                    if let Some(cell) = screen.cell(row, col) {
+                        let ch = cell.contents();
+                        if ch.is_empty() {
+                            line.push(' ');
+                        } else {
+                            line.push_str(&ch);
+                        }
+                    }
+                }
+                text.push_str(line.trim_end());
+                text.push('\n');
+            }
+            text
+        } else {
+            String::new()
+        }
+    }
+
     pub fn write_input(&self, data: &[u8]) {
         if let Ok(mut w) = self.writer.lock() {
             let _ = w.write_all(data);

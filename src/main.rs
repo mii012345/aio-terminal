@@ -1,3 +1,4 @@
+mod agent_view;
 mod app;
 mod editor;
 mod file_tree;
