@@ -4,13 +4,18 @@ use std::path::{Path, PathBuf};
 pub struct FileTree {
     pub root: PathBuf,
     expanded: std::collections::HashSet<PathBuf>,
+    pending_open: Option<PathBuf>,
 }
 
 impl FileTree {
     pub fn new(root: PathBuf) -> Self {
         let mut expanded = std::collections::HashSet::new();
         expanded.insert(root.clone());
-        Self { root, expanded }
+        Self { root, expanded, pending_open: None }
+    }
+
+    pub fn take_pending_open(&mut self) -> Option<PathBuf> {
+        self.pending_open.take()
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui, rect: Rect) {
@@ -53,14 +58,18 @@ impl FileTree {
                 ui.add_space(indent);
                 let label = format!("{} {}", icon, name);
                 let resp = ui.selectable_label(false, &label);
-                if resp.clicked() && is_dir {
-                    if self.expanded.contains(&entry) {
-                        self.expanded.remove(&entry);
+                if resp.clicked() {
+                    if is_dir {
+                        if self.expanded.contains(&entry) {
+                            self.expanded.remove(&entry);
+                        } else {
+                            self.expanded.insert(entry.clone());
+                        }
                     } else {
-                        self.expanded.insert(entry.clone());
+                        // Open file in editor
+                        self.pending_open = Some(entry.clone());
                     }
                 }
-                // TODO: clicking files should open them in editor (Phase 3)
             });
 
             if is_dir && self.expanded.contains(&entry) {

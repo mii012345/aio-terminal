@@ -1,4 +1,5 @@
 mod app;
+mod editor;
 mod file_tree;
 mod pane;
 mod terminal;
